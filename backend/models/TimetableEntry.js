@@ -11,7 +11,7 @@ const TimetableEntrySchema = new mongoose.Schema({
   subjectType: { type: String, enum: ['theory', 'lab', 'tutorial'], required: true },
   faculty: { type: String, required: true },
   room: { type: String, required: true },
-  labGroup: { type: String, enum: ['G1', 'G2', 'Both'], required: false },
+  labGroup: { type: String, enum: ['G1', 'G2', 'Both', ''], required: false },
 }, { timestamps: true });
 
 module.exports = mongoose.model('TimetableEntry', TimetableEntrySchema);

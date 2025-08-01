@@ -1,3 +1,5 @@
+function TimetableCell({ day, time, course, year, section }: { day: string; time: string; course: string; year: string; section: string })
+function TimetableCell({ day, time, course, year, section }: { day: string; time: string; course: string; year: string; section: string })
 "use client"
 
 import { useState, useEffect } from "react"
@@ -88,9 +90,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center space-x-4">
-          <div className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center">
-            <GraduationCap className="w-8 h-8 text-white" />
-          </div>
+          <img src="/logo.png" alt="College Logo" className="h-14 w-14 rounded-full border border-blue-200 bg-white shadow" />
           <div>
             <h1 className="text-3xl font-bold text-blue-900 leading-tight">SSCBS Portal</h1>
             <p className="text-sm text-blue-700">Shaheed Sukhdev College of Business Studies</p>
@@ -122,6 +122,9 @@ function AppTabs() {
         <TabsTrigger value="faculty" className="flex-1 flex items-center justify-center gap-2">
           <Users className="w-4 h-4" /> Faculty
         </TabsTrigger>
+        <TabsTrigger value="subjects" className="flex-1 flex items-center justify-center gap-2">
+          <Users className="w-4 h-4" /> Subjects
+        </TabsTrigger>
         <TabsTrigger value="schedules" className="flex-1 flex items-center justify-center gap-2">
           <Clock className="w-4 h-4" /> Schedules
         </TabsTrigger>
@@ -133,6 +136,7 @@ function AppTabs() {
       <TabsContent value="timetable"><TimetableContent /></TabsContent>
       <TabsContent value="students"><StudentsContent /></TabsContent>
       <TabsContent value="faculty"><FacultyContent /></TabsContent>
+      <TabsContent value="subjects"><SubjectsContent /></TabsContent>
       <TabsContent value="schedules"><SchedulesContent /></TabsContent>
       <TabsContent value="settings"><SettingsContent /></TabsContent>
     </Tabs>
@@ -264,6 +268,7 @@ function TimetableContent() {
   const [selectedYear, setSelectedYear] = useState("")
   const [selectedSection, setSelectedSection] = useState("")
 
+  
   return (
     <div className="space-y-6">
       <div>
@@ -345,18 +350,23 @@ function TimetableContent() {
 }
 
 function TimetableGrid({ course, year, section }: { course: string; year: string; section: string }) {
+  const [entries, setEntries] = useState([]);
   const timeSlots = [
-    "9:00-10:00",
-    "10:00-11:00",
-    "11:00-12:00",
-    "12:00-1:00",
-    "1:00-2:00",
-    "2:00-3:00",
-    "3:00-4:00",
-    "4:00-5:00",
-  ]
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    "9:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-1:00",
+    "1:00-2:00", "2:00-3:00", "3:00-4:00", "4:00-5:00",
+  ];
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+  useEffect(() => {
+    const fetchEntries = async () => {
+      const res = await fetch(
+        `http://localhost:5000/api/timetable?course=${course}&year=${year}&section=${section}`
+      );
+      const data = await res.json();
+      if (res.ok) setEntries(data);
+    };
+    fetchEntries();
+  }, [course, year, section]);
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -390,11 +400,24 @@ function TimetableGrid({ course, year, section }: { course: string; year: string
             {timeSlots.map((time) => (
               <tr key={time}>
                 <td className="border border-gray-300 p-2 font-medium bg-gray-50">{time}</td>
-                {days.map((day) => (
-                  <td key={`${day}-${time}`} className="border border-gray-300 p-1">
-                    <TimetableCell day={day} time={time} course={course} />
-                  </td>
-                ))}
+                {days.map((day) => {
+                  // Find entry for this cell
+                  const cellEntry = entries.find(
+                    (e) => e.day === day && e.timeSlot === time
+                  );
+                  return (
+                    <td key={`${day}-${time}`} className="border border-gray-300 p-1">
+                      <TimetableCell
+                        day={day}
+                        time={time}
+                        course={course}
+                        year={year}
+                        section={section}
+                        entry={cellEntry}
+                      />
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
@@ -404,15 +427,63 @@ function TimetableGrid({ course, year, section }: { course: string; year: string
   )
 }
 
-function TimetableCell({ day, time, course }: { day: string; time: string; course: string }) {
-  const [isEditing, setIsEditing] = useState(false)
+function TimetableCell({ day, time, course, year, section, entry }: { day: string; time: string; course: string; year: string; section: string; entry?: any }) {
+  const [isEditing, setIsEditing] = useState(false);
   const [cellData, setCellData] = useState({
-    subject: "",
-    subjectType: "", // theory, lab, tutorial
-    faculty: "",
-    room: "",
-    labGroup: "", // G1, G2, or Both
-  })
+    subject: entry?.subject || "",
+    subjectType: entry?.subjectType || "",
+    faculty: entry?.faculty || "",
+    room: entry?.room || "",
+    labGroup: entry?.labGroup || "",
+  });
+
+  useEffect(() => {
+    setCellData({
+      subject: entry?.subject || "",
+      subjectType: entry?.subjectType || "",
+      faculty: entry?.faculty || "",
+      room: entry?.room || "",
+      labGroup: entry?.labGroup || "",
+    });
+  }, [entry]);
+
+  // Add POST method for saving timetable entry with validation
+  const handleSaveTimetableEntry = async () => {
+    // Validate required fields
+    if (!course || !year || !section || !day || !time || !cellData.subject || !cellData.subjectType || !cellData.faculty || !cellData.room) {
+      alert("Please fill all required fields before saving.");
+      return;
+    }
+    const entry = {
+      course,
+      year,
+      section,
+      day,
+      timeSlot: time,
+      subject: cellData.subject,
+      subjectCode: availableSubjects.find(s => s.name === cellData.subject)?.code || "123",
+      subjectType: cellData.subjectType,
+      faculty: cellData.faculty,
+      room: cellData.room,
+      labGroup: cellData.labGroup,
+    }
+    try {
+      console.log("Saving timetable entry:", entry);
+      const res = await fetch("http://localhost:5000/api/timetable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entry),
+      })
+      if (res.ok) {
+        setIsEditing(false)
+      } else {
+        const data = await res.json();
+        alert(data.message || "Failed to save timetable entry");
+      }
+    } catch (err) {
+      alert("Network error while saving timetable entry");
+    }
+  }
 
   // Replace the static availableSubjects array with course-specific subjects
   const getCourseSubjects = (course: string) => {
@@ -449,6 +520,8 @@ function TimetableCell({ day, time, course }: { day: string; time: string; cours
         return []
     }
   }
+
+  
 
   const availableSubjects = getCourseSubjects(course)
 
@@ -514,7 +587,7 @@ function TimetableCell({ day, time, course }: { day: string; time: string; cours
         />
 
         <div className="flex space-x-1">
-          <Button size="sm" className="text-xs h-6 px-2" onClick={() => setIsEditing(false)}>
+          <Button size="sm" className="text-xs h-6 px-2" onClick={handleSaveTimetableEntry}>
             Save
           </Button>
           <Button
@@ -1084,6 +1157,362 @@ function StudentsContent() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  )
+}
+
+
+function SubjectsContent() {
+  const [subjects, setSubjects] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      setLoading(true)
+      setError("")
+      try {
+        const res = await fetch("http://localhost:5000/api/subjects", {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          setError(data.message || `Failed to fetch subjects (Status: ${res.status})`)
+          return
+        }
+        const data = await res.json()
+        setSubjects(data)
+      } catch (err) {
+        setError("Network error. Is the backend running at http://localhost:5000?")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchSubjects()
+  }, [])
+
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [newSubject, setNewSubject] = useState({
+    name: "",
+    code: "",
+    course: "",
+    year: "",
+    totalCredits: 0,
+    theoryCredits: 0,
+    labCredits: 0,
+    tutorialCredits: 0,
+    semester: "",
+    department: "",
+  })
+
+  const handleAddSubject = () => {
+    if (newSubject.name && newSubject.code) {
+      setSubjects([...subjects, { ...newSubject, id: Date.now() }])
+      setNewSubject({
+        name: "",
+        code: "",
+        course: "",
+        year: "",
+        totalCredits: 0,
+        theoryCredits: 0,
+        labCredits: 0,
+        tutorialCredits: 0,
+        semester: "",
+        department: "",
+      })
+      setShowAddForm(false)
+    }
+  }
+
+  const getWeeklyClasses = (subject: any) => {
+    // In Indian system: Theory = 1 credit = 1 class/week, Lab = 1 credit = 1 session/week (but longer duration)
+    return {
+      theory: subject.theoryCredits,
+      lab: Math.ceil(subject.labCredits / 2), // Lab credits usually count as 2 credits per session
+      tutorial: subject.tutorialCredits,
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Subject Management</h2>
+          <p className="text-gray-600">Manage subjects with credit structure for proper timetable allocation</p>
+        </div>
+        <Button onClick={() => setShowAddForm(true)}>
+          <BookOpen className="w-4 h-4 mr-2" />
+          Add New Subject
+        </Button>
+      </div>
+
+      {showAddForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Add New Subject</CardTitle>
+            <CardDescription>Enter subject details with credit structure</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Subject Name</Label>
+                <Input
+                  value={newSubject.name}
+                  onChange={(e) => setNewSubject({ ...newSubject, name: e.target.value })}
+                  placeholder="e.g., Business Mathematics"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Subject Code</Label>
+                <Input
+                  value={newSubject.code}
+                  onChange={(e) => setNewSubject({ ...newSubject, code: e.target.value })}
+                  placeholder="e.g., BMS101"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Course</Label>
+                <select
+                  className="w-full p-2 border rounded-md"
+                  value={newSubject.course}
+                  onChange={(e) => setNewSubject({ ...newSubject, course: e.target.value })}
+                >
+                  <option value="">Select Course</option>
+                  <option value="BMS">BMS</option>
+                  <option value="BFIA">BFIA</option>
+                  <option value="CS">Computer Science</option>
+                  <option value="CyberSec">Cyber Security</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Year</Label>
+                <select
+                  className="w-full p-2 border rounded-md"
+                  value={newSubject.year}
+                  onChange={(e) => setNewSubject({ ...newSubject, year: e.target.value })}
+                >
+                  <option value="">Select Year</option>
+                  <option value="1">1st Year</option>
+                  <option value="2">2nd Year</option>
+                  <option value="3">3rd Year</option>
+                  <option value="4">4th Year</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Semester</Label>
+                <select
+                  className="w-full p-2 border rounded-md"
+                  value={newSubject.semester}
+                  onChange={(e) => setNewSubject({ ...newSubject, semester: e.target.value })}
+                >
+                  <option value="">Select Semester</option>
+                  <option value="1">Semester 1</option>
+                  <option value="2">Semester 2</option>
+                  <option value="3">Semester 3</option>
+                  <option value="4">Semester 4</option>
+                  <option value="5">Semester 5</option>
+                  <option value="6">Semester 6</option>
+                  <option value="7">Semester 7</option>
+                  <option value="8">Semester 8</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Department</Label>
+                <Input
+                  value={newSubject.department}
+                  onChange={(e) => setNewSubject({ ...newSubject, department: e.target.value })}
+                  placeholder="e.g., Mathematics"
+                />
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <h4 className="font-medium mb-3">Credit Structure</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label>Total Credits</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={newSubject.totalCredits}
+                    onChange={(e) =>
+                      setNewSubject({ ...newSubject, totalCredits: Number.parseInt(e.target.value) || 0 })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Theory Credits</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="8"
+                    value={newSubject.theoryCredits}
+                    onChange={(e) =>
+                      setNewSubject({ ...newSubject, theoryCredits: Number.parseInt(e.target.value) || 0 })
+                    }
+                  />
+                  <p className="text-xs text-gray-500">1 credit = 1 class/week</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Lab Credits</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="6"
+                    value={newSubject.labCredits}
+                    onChange={(e) => setNewSubject({ ...newSubject, labCredits: Number.parseInt(e.target.value) || 0 })}
+                  />
+                  <p className="text-xs text-gray-500">2 credits = 1 lab session/week</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Tutorial Credits</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="4"
+                    value={newSubject.tutorialCredits}
+                    onChange={(e) =>
+                      setNewSubject({ ...newSubject, tutorialCredits: Number.parseInt(e.target.value) || 0 })
+                    }
+                  />
+                  <p className="text-xs text-gray-500">1 credit = 1 tutorial/week</p>
+                </div>
+              </div>
+              <div className="mt-3 p-3 bg-blue-50 rounded-md">
+                <p className="text-sm text-blue-800">
+                  <strong>Weekly Classes:</strong> {newSubject.theoryCredits} Theory +{" "}
+                  {Math.ceil(newSubject.labCredits / 2)} Lab + {newSubject.tutorialCredits} Tutorial
+                </p>
+              </div>
+            </div>
+
+            <div className="flex space-x-2">
+              <Button onClick={handleAddSubject}>Add Subject</Button>
+              <Button variant="outline" onClick={() => setShowAddForm(false)}>
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Subject List</CardTitle>
+          <CardDescription>All subjects with their credit structure and weekly class requirements</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-2">Subject Code</th>
+                  <th className="text-left p-2">Subject Name</th>
+                  <th className="text-left p-2">Course/Year</th>
+                  <th className="text-left p-2">Total Credits</th>
+                  <th className="text-left p-2">Theory</th>
+                  <th className="text-left p-2">Lab</th>
+                  <th className="text-left p-2">Tutorial</th>
+                  <th className="text-left p-2">Weekly Classes</th>
+                  <th className="text-left p-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {subjects.map((subject) => {
+                  const weeklyClasses = getWeeklyClasses(subject)
+                  return (
+                    <tr key={subject.id} className="border-b hover:bg-gray-50">
+                      <td className="p-2 font-mono text-sm">{subject.code}</td>
+                      <td className="p-2 font-medium">{subject.name}</td>
+                      <td className="p-2">
+                        {subject.course} - {subject.year}
+                        {subject.year === "1" ? "st" : subject.year === "2" ? "nd" : subject.year === "3" ? "rd" : "th"}{" "}
+                        Year
+                      </td>
+                      <td className="p-2 text-center">{subject.totalCredits}</td>
+                      <td className="p-2 text-center">{subject.theoryCredits}</td>
+                      <td className="p-2 text-center">{subject.labCredits}</td>
+                      <td className="p-2 text-center">{subject.tutorialCredits}</td>
+                      <td className="p-2">
+                        <div className="text-xs space-y-1">
+                          {weeklyClasses.theory > 0 && (
+                            <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                              Theory: {weeklyClasses.theory}/week
+                            </div>
+                          )}
+                          {weeklyClasses.lab > 0 && (
+                            <div className="bg-green-100 text-green-800 px-2 py-1 rounded">
+                              Lab: {weeklyClasses.lab}/week
+                            </div>
+                          )}
+                          {weeklyClasses.tutorial > 0 && (
+                            <div className="bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                              Tutorial: {weeklyClasses.tutorial}/week
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-2">
+                        <div className="flex space-x-2">
+                          <Button size="sm" variant="outline">
+                            Edit
+                          </Button>
+                          <Button size="sm" variant="destructive">
+                            Delete
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Credit System Guide</CardTitle>
+          <CardDescription>Understanding the Indian university credit system</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 bg-blue-50 rounded-lg">
+              <h4 className="font-medium text-blue-900 mb-2">Theory Credits</h4>
+              <p className="text-sm text-blue-800">
+                1 Credit = 1 Hour per week
+                <br />
+                Lecture-based classroom teaching
+                <br />
+                Example: 3 Theory Credits = 3 classes per week
+              </p>
+            </div>
+            <div className="p-4 bg-green-50 rounded-lg">
+              <h4 className="font-medium text-green-900 mb-2">Lab/Practical Credits</h4>
+              <p className="text-sm text-green-800">
+                2 Credits = 1 Lab Session per week
+                <br />
+                Hands-on practical work (2-3 hours)
+                <br />
+                Example: 4 Lab Credits = 2 lab sessions per week
+              </p>
+            </div>
+            <div className="p-4 bg-purple-50 rounded-lg">
+              <h4 className="font-medium text-purple-900 mb-2">Tutorial Credits</h4>
+              <p className="text-sm text-purple-800">
+                1 Credit = 1 Hour per week
+                <br />
+                Small group discussions/problem solving
+                <br />
+                Example: 1 Tutorial Credit = 1 tutorial per week
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
