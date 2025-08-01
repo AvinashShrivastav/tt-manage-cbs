@@ -1,5 +1,3 @@
-function TimetableCell({ day, time, course, year, section }: { day: string; time: string; course: string; year: string; section: string })
-function TimetableCell({ day, time, course, year, section }: { day: string; time: string; course: string; year: string; section: string })
 "use client"
 
 import { useState, useEffect } from "react"
@@ -31,7 +29,7 @@ export default function LoginPage() {
     setLoading(true)
     setError("")
     try {
-      const res = await fetch("http://localhost:5000/api/auth/login", {
+      const res = await fetch("https://tt-manage-cbs-3.onrender.com:5000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })
@@ -360,7 +358,7 @@ function TimetableGrid({ course, year, section }: { course: string; year: string
   useEffect(() => {
     const fetchEntries = async () => {
       const res = await fetch(
-        `http://localhost:5000/api/timetable?course=${course}&year=${year}&section=${section}`
+        `https://tt-manage-cbs-3.onrender.com:5000/api/timetable?course=${course}&year=${year}&section=${section}`
       );
       const data = await res.json();
       if (res.ok) setEntries(data);
@@ -469,7 +467,7 @@ function TimetableCell({ day, time, course, year, section, entry }: { day: strin
     }
     try {
       console.log("Saving timetable entry:", entry);
-      const res = await fetch("http://localhost:5000/api/timetable", {
+      const res = await fetch("https://tt-manage-cbs-3.onrender.com:5000/api/timetable", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(entry),
@@ -665,7 +663,7 @@ function FacultyContent() {
       setLoading(true)
       setError("")
       try {
-        const res = await fetch("http://localhost:5000/api/faculty", {
+        const res = await fetch("https://tt-manage-cbs-3.onrender.com:5000/api/faculty", {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -680,7 +678,7 @@ function FacultyContent() {
         const data = await res.json()
         setFaculties(data)
       } catch (err) {
-        setError("Network error. Is the backend running at http://localhost:5000?")
+        setError("Network error. Is the backend running at https://tt-manage-cbs-3.onrender.com:5000?")
         console.error("Network error fetching faculty:", err)
       } finally {
         setLoading(false)
@@ -714,7 +712,7 @@ function FacultyContent() {
             <div className="text-red-600">
               {error}
               <div className="text-xs text-gray-500 mt-2">
-                If you see a network error, make sure your backend is running and accessible at <code>http://localhost:5000/api/faculty</code>.<br />
+                If you see a network error, make sure your backend is running and accessible at <code>https://tt-manage-cbs-3.onrender.com:5000/api/faculty</code>.<br />
                 Check browser console for more details.
               </div>
             </div>
@@ -781,7 +779,7 @@ function StudentsContent() {
     setLoading(true)
     setError("")
     try {
-      const res = await fetch("http://localhost:5000/api/students")
+      const res = await fetch("https://tt-manage-cbs-3.onrender.com:5000/api/students")
       const data = await res.json()
       if (res.ok) {
         setStudents(data)
@@ -801,7 +799,7 @@ function StudentsContent() {
     setAddLoading(true)
     setAddError("")
     try {
-      const res = await fetch("http://localhost:5000/api/students", {
+      const res = await fetch("https://tt-manage-cbs-3.onrender.com:5000/api/students", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(addForm)
@@ -1172,7 +1170,7 @@ function SubjectsContent() {
       setLoading(true)
       setError("")
       try {
-        const res = await fetch("http://localhost:5000/api/subjects", {
+        const res = await fetch("https://tt-manage-cbs-3.onrender.com:5000/api/subjects", {
           method: "GET",
           headers: { "Content-Type": "application/json" },
         })
@@ -1184,7 +1182,7 @@ function SubjectsContent() {
         const data = await res.json()
         setSubjects(data)
       } catch (err) {
-        setError("Network error. Is the backend running at http://localhost:5000?")
+        setError("Network error. Is the backend running at https://tt-manage-cbs-3.onrender.com:5000?")
       } finally {
         setLoading(false)
       }
