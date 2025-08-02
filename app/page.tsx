@@ -1,3 +1,5 @@
+function TimetableCell({ day, time, course, year, section }: { day: string; time: string; course: string; year: string; section: string })
+function TimetableCell({ day, time, course, year, section }: { day: string; time: string; course: string; year: string; section: string })
 "use client"
 
 import { useState, useEffect } from "react"
@@ -6,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { GraduationCap, Users, Calendar, Settings, BookOpen, Clock } from "lucide-react"
+import { GraduationCap, Users, Calendar, Settings, BookOpen, Clock, FileText } from "lucide-react"
 
 
 
@@ -29,7 +31,7 @@ export default function LoginPage() {
     setLoading(true)
     setError("")
     try {
-      const res = await fetch("https://tt-manage-cbs-3.onrender.com:5000/api/auth/login", {
+      const res = await fetch("http://localhost:5000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })
@@ -264,7 +266,27 @@ function DashboardContent() {
 function TimetableContent() {
   const [selectedCourse, setSelectedCourse] = useState("")
   const [selectedYear, setSelectedYear] = useState("")
+  const [selectedSemester, setSelectedSemester] = useState("")
   const [selectedSection, setSelectedSection] = useState("")
+
+  useEffect(() => {
+    setSelectedSemester("");
+  }, [selectedYear]);
+
+  const availableSemesters = () => {
+    switch (selectedYear) {
+      case "1":
+        return ["1", "2"];
+      case "2":
+        return ["3", "4"];
+      case "3":
+        return ["5", "6"];
+      case "4":
+        return ["7", "8"];
+      default:
+        return [];
+    }
+  };
 
   
   return (
@@ -277,10 +299,10 @@ function TimetableContent() {
       <Card>
         <CardHeader>
           <CardTitle>Create/Edit Timetable</CardTitle>
-          <CardDescription>Select course, year, and section to manage timetable</CardDescription>
+          <CardDescription>Select course, year, semester and section to manage timetable</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
               <Label>Course</Label>
               <select
@@ -310,6 +332,20 @@ function TimetableContent() {
               </select>
             </div>
             <div className="space-y-2">
+              <Label>Semester</Label>
+              <select
+                className="w-full p-2 border rounded-md"
+                value={selectedSemester}
+                onChange={(e) => setSelectedSemester(e.target.value)}
+                disabled={!selectedYear}
+              >
+                <option value="">Select Semester</option>
+                {availableSemesters().map(sem => (
+                  <option key={sem} value={sem}>{sem}{sem === "1" ? "st" : sem === "2" ? "nd" : sem === "3" ? "rd" : "th"} Sem</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
               <Label>Section</Label>
               <select
                 className="w-full p-2 border rounded-md"
@@ -336,9 +372,9 @@ function TimetableContent() {
             </div>
           </div>
 
-          {selectedCourse && selectedYear && selectedSection && (
+          {selectedCourse && selectedYear && selectedSection && selectedSemester && (
             <div className="mt-6">
-              <TimetableGrid course={selectedCourse} year={selectedYear} section={selectedSection} />
+              <TimetableGrid course={selectedCourse} year={selectedYear} section={selectedSection} semester={selectedSemester} />
             </div>
           )}
         </CardContent>
@@ -347,7 +383,9 @@ function TimetableContent() {
   )
 }
 
-function TimetableGrid({ course, year, section }: { course: string; year: string; section: string }) {
+import { getNextDay, formatGoogleCalendarDate } from "@/lib/utils"
+
+function TimetableGrid({ course, year, semester, section }: { course: string; year: string; semester: string; section: string }) {
   const [entries, setEntries] = useState([]);
   const timeSlots = [
     "9:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-1:00",
@@ -355,16 +393,78 @@ function TimetableGrid({ course, year, section }: { course: string; year: string
   ];
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+  const fetchEntries = async () => {
+    const res = await fetch(
+      `http://localhost:5000/api/timetable?course=${course}&year=${year}&semester=${semester}&section=${section}`
+    );
+    const data = await res.json();
+    if (res.ok) setEntries(data);
+  };
+
   useEffect(() => {
-    const fetchEntries = async () => {
-      const res = await fetch(
-        `https://tt-manage-cbs-3.onrender.com:5000/api/timetable?course=${course}&year=${year}&section=${section}`
-      );
-      const data = await res.json();
-      if (res.ok) setEntries(data);
-    };
     fetchEntries();
-  }, [course, year, section]);
+  }, [course, year, semester, section]);
+
+  const handleSave = () => {
+    fetchEntries();
+  };
+
+  const handleNotify = async () => {
+    try {
+      const res = await fetch("http://localhost:5000/api/timetable/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ course, year, semester, section, entries }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || "Notifications sent successfully!");
+      } else {
+        alert(data.message || "Failed to send notifications.");
+      }
+    } catch (err) {
+      alert("Network error while sending notifications.");
+    }
+  };
+
+  const handleExportToCalendar = () => {
+    entries.forEach(entry => {
+      const [startTime, endTime] = entry.timeSlot.split("-");
+      const startDate = getNextDay(entry.day);
+      const endDate = new Date(startDate);
+
+      const googleCalendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(entry.subject.name)}&dates=${formatGoogleCalendarDate(startDate, startTime)}/${formatGoogleCalendarDate(endDate, endTime)}&details=${encodeURIComponent(`Faculty: ${entry.faculty.name}`)}&location=${encodeURIComponent(entry.room.name)}`;
+
+      window.open(googleCalendarUrl, "_blank");
+    });
+  };
+
+  const handleExportPdf = async () => {
+    try {
+      const res = await fetch("http://localhost:5000/api/timetable/export-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ course, year, semester, section, entries }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `timetable_${course}_${year}_${semester}_${section}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } else {
+        const data = await res.json();
+        alert(data.message || "Failed to export PDF");
+      }
+    } catch (err) {
+      alert("Network error while exporting PDF");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -373,12 +473,15 @@ function TimetableGrid({ course, year, section }: { course: string; year: string
           {year === "1" ? "st" : year === "2" ? "nd" : year === "3" ? "rd" : "th"} Year - Section {section}
         </h3>
         <div className="space-x-2">
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={handleExportToCalendar} type="button">
             <Calendar className="w-4 h-4 mr-2" />
             Export to Calendar
-            <span className="ml-2 text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">Coming Soon</span>
           </Button>
-          <Button size="sm">Save Timetable</Button>
+          <Button size="sm" onClick={handleNotify} type="button">Notify</Button>
+          <Button variant="outline" size="sm" onClick={handleExportPdf} type="button">
+            <FileText className="w-4 h-4 mr-2" />
+            Export to PDF
+          </Button>
         </div>
       </div>
 
@@ -410,8 +513,10 @@ function TimetableGrid({ course, year, section }: { course: string; year: string
                         time={time}
                         course={course}
                         year={year}
+                        semester={semester}
                         section={section}
                         entry={cellEntry}
+                        onSave={handleSave}
                       />
                     </td>
                   );
@@ -425,55 +530,97 @@ function TimetableGrid({ course, year, section }: { course: string; year: string
   )
 }
 
-function TimetableCell({ day, time, course, year, section, entry }: { day: string; time: string; course: string; year: string; section: string; entry?: any }) {
+function TimetableCell({ day, time, course, year, semester, section, entry, onSave }: { day: string; time: string; course: string; year: string; semester: string; section: string; entry?: any, onSave: () => void }) {
   const [isEditing, setIsEditing] = useState(false);
   const [cellData, setCellData] = useState({
-    subject: entry?.subject || "",
+    subject: entry?.subject?._id || "",
     subjectType: entry?.subjectType || "",
-    faculty: entry?.faculty || "",
-    room: entry?.room || "",
+    faculty: entry?.faculty?._id || "",
+    room: entry?.room?._id || "",
     labGroup: entry?.labGroup || "",
   });
 
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [availableFaculty, setAvailableFaculty] = useState([]);
+  const [availableRooms, setAvailableRooms] = useState([]);
+
   useEffect(() => {
     setCellData({
-      subject: entry?.subject || "",
+      subject: entry?.subject?._id || "",
       subjectType: entry?.subjectType || "",
-      faculty: entry?.faculty || "",
-      room: entry?.room || "",
+      faculty: entry?.faculty?._id || "",
+      room: entry?.room?._id || "",
       labGroup: entry?.labGroup || "",
     });
   }, [entry]);
 
+  useEffect(() => {
+    const fetchDropdownData = async () => {
+      try {
+        const [subjectsRes, facultyRes, roomsRes] = await Promise.all([
+          fetch(`http://localhost:5000/api/subjects?course=${course}&year=${year}&semester=${semester}`),
+          fetch('http://localhost:5000/api/faculty'),
+          fetch('http://localhost:5000/api/rooms'),
+        ]);
+
+        if (subjectsRes.ok) {
+          const subjectsData = await subjectsRes.json();
+          setAvailableSubjects(subjectsData);
+        }
+        if (facultyRes.ok) {
+          const facultyData = await facultyRes.json();
+          setAvailableFaculty(facultyData);
+        }
+        if (roomsRes.ok) {
+          const roomsData = await roomsRes.json();
+          setAvailableRooms(roomsData);
+        }
+      } catch (error) {
+        console.error("Failed to fetch dropdown data", error);
+      }
+    };
+
+    if (isEditing) {
+      fetchDropdownData();
+    }
+  }, [isEditing, course, year, semester]);
+
   // Add POST method for saving timetable entry with validation
   const handleSaveTimetableEntry = async () => {
     // Validate required fields
-    if (!course || !year || !section || !day || !time || !cellData.subject || !cellData.subjectType || !cellData.faculty || !cellData.room) {
+    if (!course || !year || !semester || !section || !day || !time || !cellData.subject || !cellData.subjectType || !cellData.faculty || !cellData.room) {
       alert("Please fill all required fields before saving.");
       return;
     }
-    const entry = {
+    const selectedSubject = availableSubjects.find(s => s._id === cellData.subject);
+    const entryData = {
       course,
       year,
+      semester,
       section,
       day,
       timeSlot: time,
       subject: cellData.subject,
-      subjectCode: availableSubjects.find(s => s.name === cellData.subject)?.code || "123",
+      subjectCode: selectedSubject?.code || "123",
       subjectType: cellData.subjectType,
       faculty: cellData.faculty,
       room: cellData.room,
       labGroup: cellData.labGroup,
     }
+
+    const url = entry?._id ? `http://localhost:5000/api/timetable/${entry._id}` : "http://localhost:5000/api/timetable";
+    const method = entry?._id ? "PUT" : "POST";
+
     try {
-      console.log("Saving timetable entry:", entry);
-      const res = await fetch("https://tt-manage-cbs-3.onrender.com:5000/api/timetable", {
-        method: "POST",
+      console.log("Saving timetable entry:", entryData);
+      const res = await fetch(url, {
+        method: method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(entry),
+        body: JSON.stringify(entryData),
       })
       if (res.ok) {
-        setIsEditing(false)
+        setIsEditing(false);
+        onSave();
       } else {
         const data = await res.json();
         alert(data.message || "Failed to save timetable entry");
@@ -482,46 +629,6 @@ function TimetableCell({ day, time, course, year, section, entry }: { day: strin
       alert("Network error while saving timetable entry");
     }
   }
-
-  // Replace the static availableSubjects array with course-specific subjects
-  const getCourseSubjects = (course: string) => {
-    switch (course) {
-      case "BMS":
-        return [
-          { name: "Business Mathematics", code: "BMS101", theoryCredits: 3, labCredits: 1, tutorialCredits: 0 },
-          { name: "Principles of Management", code: "BMS102", theoryCredits: 4, labCredits: 0, tutorialCredits: 1 },
-          { name: "Business Communication", code: "BMS103", theoryCredits: 3, labCredits: 0, tutorialCredits: 1 },
-          { name: "Marketing Management", code: "BMS201", theoryCredits: 4, labCredits: 0, tutorialCredits: 0 },
-        ]
-      case "BFIA":
-        return [
-          { name: "Financial Accounting", code: "BFIA101", theoryCredits: 4, labCredits: 2, tutorialCredits: 0 },
-          { name: "Investment Analysis", code: "BFIA201", theoryCredits: 3, labCredits: 1, tutorialCredits: 1 },
-          { name: "Portfolio Management", code: "BFIA301", theoryCredits: 4, labCredits: 0, tutorialCredits: 1 },
-          { name: "Financial Markets", code: "BFIA302", theoryCredits: 3, labCredits: 1, tutorialCredits: 0 },
-        ]
-      case "CS":
-        return [
-          { name: "Data Structures", code: "CS201", theoryCredits: 3, labCredits: 2, tutorialCredits: 0 },
-          { name: "Computer Networks", code: "CS301", theoryCredits: 3, labCredits: 2, tutorialCredits: 0 },
-          { name: "Database Systems", code: "CS302", theoryCredits: 3, labCredits: 2, tutorialCredits: 0 },
-          { name: "Software Engineering", code: "CS401", theoryCredits: 4, labCredits: 0, tutorialCredits: 1 },
-        ]
-      case "CyberSec":
-        return [
-          { name: "Network Security", code: "CYB101", theoryCredits: 2, labCredits: 2, tutorialCredits: 0 },
-          { name: "Ethical Hacking", code: "CYB201", theoryCredits: 2, labCredits: 4, tutorialCredits: 0 },
-          { name: "Cryptography", code: "CYB301", theoryCredits: 3, labCredits: 2, tutorialCredits: 0 },
-          { name: "Digital Forensics", code: "CYB401", theoryCredits: 2, labCredits: 2, tutorialCredits: 1 },
-        ]
-      default:
-        return []
-    }
-  }
-
-  
-
-  const availableSubjects = getCourseSubjects(course)
 
   if (isEditing) {
     return (
@@ -533,7 +640,7 @@ function TimetableCell({ day, time, course, year, section, entry }: { day: strin
         >
           <option value="">Select Subject</option>
           {availableSubjects.map((subject) => (
-            <option key={subject.code} value={subject.name}>
+            <option key={subject._id} value={subject._id}>
               {subject.name} ({subject.code})
             </option>
           ))}
@@ -571,18 +678,25 @@ function TimetableCell({ day, time, course, year, section, entry }: { day: strin
           onChange={(e) => setCellData({ ...cellData, faculty: e.target.value })}
         >
           <option value="">Select Faculty</option>
-          <option value="Dr. Smith">Dr. Smith</option>
-          <option value="Prof. Johnson">Prof. Johnson</option>
-          <option value="Dr. Patel">Dr. Patel</option>
+          {availableFaculty.map((faculty) => (
+            <option key={faculty._id} value={faculty._id}>
+              {faculty.name}
+            </option>
+          ))}
         </select>
 
-        <input
-          type="text"
-          placeholder={cellData.subjectType === "lab" ? "Lab Room/Number" : "Room Number"}
+        <select
           className="w-full text-xs p-1 border rounded"
           value={cellData.room}
           onChange={(e) => setCellData({ ...cellData, room: e.target.value })}
-        />
+        >
+          <option value="">Select Room</option>
+          {availableRooms.map((room) => (
+            <option key={room._id} value={room._id}>
+              {room.name} ({room.number})
+            </option>
+          ))}
+        </select>
 
         <div className="flex space-x-1">
           <Button size="sm" className="text-xs h-6 px-2" onClick={handleSaveTimetableEntry}>
@@ -629,21 +743,21 @@ function TimetableCell({ day, time, course, year, section, entry }: { day: strin
 
   return (
     <div className="min-h-[80px] p-2 cursor-pointer hover:bg-gray-50 rounded" onClick={() => setIsEditing(true)}>
-      {cellData.subject ? (
+      {entry?.subject ? (
         <div className="space-y-1">
-          <div className={`text-xs font-medium px-2 py-1 rounded ${getTypeColor(cellData.subjectType)}`}>
-            {cellData.subject}
-            {cellData.subjectType && (
+          <div className={`text-xs font-medium px-2 py-1 rounded ${getTypeColor(entry.subjectType)}`}>
+            {entry.subject.name}
+            {entry.subjectType && (
               <span className="ml-1 text-xs">
-                ({cellData.subjectType === "theory" ? "TH" : cellData.subjectType === "lab" ? "LAB" : "TUT"})
+                ({entry.subjectType === "theory" ? "TH" : entry.subjectType === "lab" ? "LAB" : "TUT"})
               </span>
             )}
           </div>
-          {cellData.subjectType === "lab" && cellData.labGroup && (
-            <div className={`text-xs px-2 py-1 rounded ${getGroupColor(cellData.labGroup)}`}>{cellData.labGroup}</div>
+          {entry.subjectType === "lab" && entry.labGroup && (
+            <div className={`text-xs px-2 py-1 rounded ${getGroupColor(entry.labGroup)}`}>{entry.labGroup}</div>
           )}
-          <div className="text-xs text-gray-600">{cellData.faculty}</div>
-          <div className="text-xs text-gray-500">{cellData.room}</div>
+          <div className="text-xs text-gray-600">{entry.faculty.name}</div>
+          <div className="text-xs text-gray-500">{entry.room.name}</div>
         </div>
       ) : (
         <div className="text-xs text-gray-400 text-center">Click to add class</div>
@@ -663,7 +777,7 @@ function FacultyContent() {
       setLoading(true)
       setError("")
       try {
-        const res = await fetch("https://tt-manage-cbs-3.onrender.com:5000/api/faculty", {
+        const res = await fetch("http://localhost:5000/api/faculty", {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -678,7 +792,7 @@ function FacultyContent() {
         const data = await res.json()
         setFaculties(data)
       } catch (err) {
-        setError("Network error. Is the backend running at https://tt-manage-cbs-3.onrender.com:5000?")
+        setError("Network error. Is the backend running at http://localhost:5000?")
         console.error("Network error fetching faculty:", err)
       } finally {
         setLoading(false)
@@ -712,7 +826,7 @@ function FacultyContent() {
             <div className="text-red-600">
               {error}
               <div className="text-xs text-gray-500 mt-2">
-                If you see a network error, make sure your backend is running and accessible at <code>https://tt-manage-cbs-3.onrender.com:5000/api/faculty</code>.<br />
+                If you see a network error, make sure your backend is running and accessible at <code>http://localhost:5000/api/faculty</code>.<br />
                 Check browser console for more details.
               </div>
             </div>
@@ -779,7 +893,7 @@ function StudentsContent() {
     setLoading(true)
     setError("")
     try {
-      const res = await fetch("https://tt-manage-cbs-3.onrender.com:5000/api/students")
+      const res = await fetch("http://localhost:5000/api/students")
       const data = await res.json()
       if (res.ok) {
         setStudents(data)
@@ -799,7 +913,7 @@ function StudentsContent() {
     setAddLoading(true)
     setAddError("")
     try {
-      const res = await fetch("https://tt-manage-cbs-3.onrender.com:5000/api/students", {
+      const res = await fetch("http://localhost:5000/api/students", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(addForm)
@@ -1170,7 +1284,7 @@ function SubjectsContent() {
       setLoading(true)
       setError("")
       try {
-        const res = await fetch("https://tt-manage-cbs-3.onrender.com:5000/api/subjects", {
+        const res = await fetch("http://localhost:5000/api/subjects", {
           method: "GET",
           headers: { "Content-Type": "application/json" },
         })
@@ -1182,7 +1296,7 @@ function SubjectsContent() {
         const data = await res.json()
         setSubjects(data)
       } catch (err) {
-        setError("Network error. Is the backend running at https://tt-manage-cbs-3.onrender.com:5000?")
+        setError("Network error. Is the backend running at http://localhost:5000?")
       } finally {
         setLoading(false)
       }
